@@ -30,7 +30,7 @@ def main():
         'midi_path': f"POP909-Dataset/POP909/{i:03}/{i:03}.mid",
         'melody_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/melody.txt",
         'chord_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/finalized_chord.txt",
-        'phrase_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/human_label1.txt",
+        # 'phrase_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/human_label1.txt",
     } for i in train_inds if i not in unused_pieces]
     training_data, dictionary = model.prepare_data(paths)
 
