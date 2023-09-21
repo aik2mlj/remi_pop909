@@ -1,0 +1,601 @@
+From 54d55d371778c46a66edb788074aff0403f4584f Mon Sep 17 00:00:00 2001
+From: aik2 <aik2mlj@gmail.com>
+Date: Thu, 21 Sep 2023 21:46:47 +0400
+Subject: [PATCH] remi with POP909
+
+---
+ finetune.py |  35 ++++++++--
+ model.py    | 116 +++++++++++++++++----------------
+ split.npz   | Bin 0 -> 7798 bytes
+ utils.py    | 181 ++++++++++++++++++----------------------------------
+ 4 files changed, 153 insertions(+), 179 deletions(-)
+ create mode 100644 split.npz
+
+diff --git a/finetune.py b/finetune.py
+index 6432096..9a459c9 100644
+--- a/finetune.py
++++ b/finetune.py
+@@ -1,16 +1,38 @@
+ from model import PopMusicTransformer
+-from glob import glob
++import pickle
+ import os
++import numpy as np
+ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+ 
++def load_split_file(split_fn):
++    split_data = np.load(split_fn)
++    train_inds = split_data['train_inds']
++    valid_inds = split_data['valid_inds']
++    return train_inds, valid_inds
++
+ def main():
+     # declare model
+     model = PopMusicTransformer(
+-        checkpoint='REMI-tempo-checkpoint',
++        checkpoint='chord',
+         is_training=True)
+     # prepare data
+-    midi_paths = glob('YOUR PERSOANL FOLDER/*.midi') # you need to revise it
+-    training_data = model.prepare_data(midi_paths=midi_paths)
++    unused_pieces = [
++        6, 18, 23, 34, 46, 56, 62, 63, 68, 79, 80, 88, 98, 102, 107, 123, 140, 152, 158, 171, 173, 176, 194, 196, 203, 208, 215, 224, 225, 229, 231, 236, 237, 251, 254, 255, 271, 278, 279, 280, 289,
++        307, 310, 311, 316, 321, 322, 324, 328, 331, 333, 338, 341, 348, 350, 354, 355, 360, 369, 370, 379, 388, 389, 390, 391, 393, 394, 400, 412, 448, 449, 454, 455, 456, 457, 458, 464, 471, 474,
++        487, 489, 506, 509, 511, 522, 531, 533, 549, 563, 584, 586, 587, 592, 609, 624, 629, 632, 633, 653, 654, 662, 665, 667, 675, 678, 689, 693, 714, 727, 733, 741, 744, 746, 748, 749, 756, 764,
++        770, 771, 775, 779, 786, 787, 788, 791, 797, 799, 800, 801, 802, 803, 804, 806, 807, 818, 843, 869, 872, 883, 884, 887, 888, 897, 899, 900, 905
++    ]
++    train_inds, valid_inds = load_split_file("./split.npz")
++    train_inds += 1
++    valid_inds += 1
++    print(len(train_inds))
++    paths = [{
++        'midi_path': f"POP909-Dataset/POP909/{i:03}/{i:03}.mid",
++        'melody_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/melody.txt",
++        'chord_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/finalized_chord.txt",
++        'phrase_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/human_label1.txt",
++    } for i in train_inds if i not in unused_pieces]
++    training_data, dictionary = model.prepare_data(paths)
+ 
+     # check output checkpoint folder
+     ####################################
+@@ -20,10 +42,13 @@ def main():
+     # if use "REMI-tempo-checkpoint"
+     # for example: my-love, cute-doggy, ...
+     ####################################
+-    output_checkpoint_folder = 'REMI-finetune' # your decision
++    output_checkpoint_folder = 'REMI-chord' # your decision
+     if not os.path.exists(output_checkpoint_folder):
+         os.mkdir(output_checkpoint_folder)
+     
++    # save dictionary
++    pickle.dump(dictionary, open(f'{output_checkpoint_folder}/dictionary.pkl', 'wb'))
++
+     # finetune
+     model.finetune(
+         training_data=training_data,
+diff --git a/model.py b/model.py
+index aff9263..8ec6f4d 100644
+--- a/model.py
++++ b/model.py
+@@ -1,6 +1,6 @@
+ import tensorflow as tf
+ import numpy as np
+-import miditoolkit
++import math
+ import modules
+ import pickle
+ import utils
+@@ -12,8 +12,10 @@ class PopMusicTransformer(object):
+     ########################################
+     def __init__(self, checkpoint, is_training=False):
+         # load dictionary
+-        self.dictionary_path = '{}/dictionary.pkl'.format(checkpoint)
+-        self.event2word, self.word2event = pickle.load(open(self.dictionary_path, 'rb'))
++        if checkpoint != 'chord':
++            self.dictionary_path = '{}/dictionary.pkl'.format(checkpoint)
++            self.event2word, self.word2event = pickle.load(open(self.dictionary_path, 'rb'))
++            self.n_token = len(self.event2word)
+         # model settings
+         self.x_len = 512
+         self.mem_len = 512
+@@ -24,7 +26,6 @@ class PopMusicTransformer(object):
+         self.n_head = 8
+         self.d_head = self.d_model // self.n_head
+         self.d_ff = 2048
+-        self.n_token = len(self.event2word)
+         self.learning_rate = 0.0002
+         # load model
+         self.is_training = is_training
+@@ -33,13 +34,13 @@ class PopMusicTransformer(object):
+         else:
+             self.batch_size = 1
+         self.checkpoint_path = '{}/model'.format(checkpoint)
+-        self.load_model()
+ 
+     ########################################
+     # load model
+     ########################################
+     def load_model(self):
+         # placeholders
++        tf.compat.v1.disable_eager_execution()
+         self.x = tf.compat.v1.placeholder(tf.int32, shape=[self.batch_size, None])
+         self.y = tf.compat.v1.placeholder(tf.int32, shape=[self.batch_size, None])
+         self.mems_i = [tf.compat.v1.placeholder(tf.float32, [self.mem_len, self.batch_size, self.d_model]) for _ in range(self.n_layer)]
+@@ -96,7 +97,8 @@ class PopMusicTransformer(object):
+         config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
+         config.gpu_options.allow_growth = True
+         self.sess = tf.compat.v1.Session(config=config)
+-        self.saver.restore(self.sess, self.checkpoint_path)
++        if self.is_training: self.sess.run(tf.compat.v1.initialize_all_variables())
++        else: self.saver.restore(self.sess, self.checkpoint_path)
+ 
+     ########################################
+     # temperature sampling
+@@ -118,15 +120,15 @@ class PopMusicTransformer(object):
+     ########################################
+     # extract events for prompt continuation
+     ########################################
+-    def extract_events(self, input_path):
+-        note_items, tempo_items = utils.read_items(input_path)
++    def extract_events(self, midi_path, melody_annotation_path, chord_annotation_path):
++        note_items = utils.get_note_items(midi_path, melody_annotation_path)
+         note_items = utils.quantize_items(note_items)
+         max_time = note_items[-1].end
+         if 'chord' in self.checkpoint_path:
+-            chord_items = utils.extract_chords(note_items)
+-            items = chord_items + tempo_items + note_items
++            chord_items = utils.get_chord_items(chord_annotation_path)
++            items = chord_items +  note_items
+         else:
+-            items = tempo_items + note_items
++            items = note_items
+         groups = utils.group_items(items, max_time)
+         events = utils.item2event(groups)
+         return events
+@@ -135,7 +137,7 @@ class PopMusicTransformer(object):
+     # generate
+     ########################################
+     def generate(self, n_target_bar, temperature, topk, output_path, prompt=None):
+-        # if prompt, load it. Or, random start
++        self.load_model()
+         if prompt:
+             events = self.extract_events(prompt)
+             words = [[self.event2word['{}_{}'.format(e.name, e.value)] for e in events]]
+@@ -145,20 +147,10 @@ class PopMusicTransformer(object):
+             for _ in range(self.batch_size):
+                 ws = [self.event2word['Bar_None']]
+                 if 'chord' in self.checkpoint_path:
+-                    tempo_classes = [v for k, v in self.event2word.items() if 'Tempo Class' in k]
+-                    tempo_values = [v for k, v in self.event2word.items() if 'Tempo Value' in k]
+-                    chords = [v for k, v in self.event2word.items() if 'Chord' in k]
+-                    ws.append(self.event2word['Position_1/16'])
+-                    ws.append(np.random.choice(chords))
+                     ws.append(self.event2word['Position_1/16'])
+-                    ws.append(np.random.choice(tempo_classes))
+-                    ws.append(np.random.choice(tempo_values))
++                    ws.append(self.event2word['Chord_N:N'])
+                 else:
+-                    tempo_classes = [v for k, v in self.event2word.items() if 'Tempo Class' in k]
+-                    tempo_values = [v for k, v in self.event2word.items() if 'Tempo Value' in k]
+-                    ws.append(self.event2word['Position_1/16'])
+-                    ws.append(np.random.choice(tempo_classes))
+-                    ws.append(np.random.choice(tempo_values))
++                    pass
+                 words.append(ws)
+         # initialize mem
+         batch_m = [np.zeros((self.mem_len, self.batch_size, self.d_model), dtype=np.float32) for _ in range(self.n_layer)]
+@@ -213,12 +205,18 @@ class PopMusicTransformer(object):
+     ########################################
+     # prepare training data
+     ########################################
+-    def prepare_data(self, midi_paths):
++    def prepare_data(self, paths):
+         # extract events
+         all_events = []
+-        for path in midi_paths:
+-            events = self.extract_events(path)
++        for path in paths:
++            events = self.extract_events(**path)
+             all_events.append(events)
++        # make dictionary
++        dictionary = sorted({f'{event.name}_{event.value}' for events in all_events for event in events})
++        dictionary.append('None_None')  # for padding
++        self.event2word = {key: i for i, key in enumerate(dictionary)}
++        self.word2event = {i: key for i, key in enumerate(dictionary)}
++        self.n_token = len(self.event2word)
+         # event to word
+         all_words = []
+         for events in all_events:
+@@ -236,9 +234,9 @@ class PopMusicTransformer(object):
+                         # something is wrong
+                         # you should handle it for your own purpose
+                         print('something is wrong! {}'.format(e))
++            words += [self.event2word['None_None']] * (math.ceil(len(events) / self.x_len) * self.x_len + 2 - len(words))
+             all_words.append(words)
+         # to training data
+-        self.group_size = 5
+         segments = []
+         for words in all_words:
+             pairs = []
+@@ -247,41 +245,49 @@ class PopMusicTransformer(object):
+                 y = words[i+1:i+self.x_len+1]
+                 pairs.append([x, y])
+             pairs = np.array(pairs)
+-            # abandon the last
+-            for i in np.arange(0, len(pairs)-self.group_size, self.group_size*2):
+-                data = pairs[i:i+self.group_size]
+-                if len(data) == self.group_size:
+-                    segments.append(data)
+-        segments = np.array(segments)
+-        return segments
++            segments.append(pairs)
++        segment_len_dict = {}
++        for segment in segments:
++            segment_len = len(segment)
++            if segment_len not in segment_len_dict:
++                segment_len_dict[segment_len] = []
++            segment_len_dict[segment_len].append(segment)
++        for length in segment_len_dict:
++            segment_len_dict[length] = np.array(segment_len_dict[length])
++        return segment_len_dict, (self.event2word, self.word2event)
+ 
+     ########################################
+     # finetune
+     ########################################
+     def finetune(self, training_data, output_checkpoint_folder):
+-        # shuffle
+-        index = np.arange(len(training_data))
+-        np.random.shuffle(index)
+-        training_data = training_data[index]
+-        num_batches = len(training_data) // self.batch_size
++        self.load_model()
+         st = time.time()
+         for e in range(200):
+             total_loss = []
+-            for i in range(num_batches):
+-                segments = training_data[self.batch_size*i:self.batch_size*(i+1)]
+-                batch_m = [np.zeros((self.mem_len, self.batch_size, self.d_model), dtype=np.float32) for _ in range(self.n_layer)]
+-                for j in range(self.group_size):
+-                    batch_x = segments[:, j, 0, :]
+-                    batch_y = segments[:, j, 1, :]
+-                    # prepare feed dict
+-                    feed_dict = {self.x: batch_x, self.y: batch_y}
+-                    for m, m_np in zip(self.mems_i, batch_m):
+-                        feed_dict[m] = m_np
+-                    # run
+-                    _, gs_, loss_, new_mem_ = self.sess.run([self.train_op, self.global_step, self.avg_loss, self.new_mem], feed_dict=feed_dict)
+-                    batch_m = new_mem_
+-                    total_loss.append(loss_)
+-                    print('>>> Epoch: {}, Step: {}, Loss: {:.5f}, Time: {:.2f}'.format(e, gs_, loss_, time.time()-st))
++            # shuffle
++            segment_lens = list(training_data.keys())
++            np.random.shuffle(segment_lens)
++            for segment_len in segment_lens:
++                # shuffle
++                same_len_segments = training_data[segment_len]
++                index = np.arange(len(same_len_segments))
++                np.random.shuffle(index)
++                same_len_segments = same_len_segments[index]
++                for i in range(len(same_len_segments) // self.batch_size):
++                    segments = same_len_segments[self.batch_size*i:self.batch_size*(i+1)]
++                    batch_m = [np.zeros((self.mem_len, self.batch_size, self.d_model), dtype=np.float32) for _ in range(self.n_layer)]
++                    for j in range(segments.shape[1]):
++                        batch_x = segments[:, j, 0, :]
++                        batch_y = segments[:, j, 1, :]
++                        # prepare feed dict
++                        feed_dict = {self.x: batch_x, self.y: batch_y}
++                        for m, m_np in zip(self.mems_i, batch_m):
++                            feed_dict[m] = m_np
++                        # run
++                        _, gs_, loss_, new_mem_ = self.sess.run([self.train_op, self.global_step, self.avg_loss, self.new_mem], feed_dict=feed_dict)
++                        batch_m = new_mem_
++                        total_loss.append(loss_)
++                        print('>>> Epoch: {}, Step: {}, Loss: {:.5f}, Time: {:.2f}'.format(e, gs_, loss_, time.time()-st))
+             self.saver.save(self.sess, '{}/model-{:03d}-{:.3f}'.format(output_checkpoint_folder, e, np.mean(total_loss)))
+             # stop
+             if np.mean(total_loss) <= 0.1:
+diff --git a/split.npz b/split.npz
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc2bf975585c602844d5d48c7f488d5f40294aec
+GIT binary patch
+literal 7798
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/utils.py b/utils.py
+index 4a5ffa8..57c73b7 100644
+--- a/utils.py
++++ b/utils.py
+@@ -1,4 +1,4 @@
+-import chord_recognition
++import math
+ import numpy as np
+ import miditoolkit
+ import copy
+@@ -25,53 +25,30 @@ class Item(object):
+         return 'Item(name={}, start={}, end={}, velocity={}, pitch={})'.format(
+             self.name, self.start, self.end, self.velocity, self.pitch)
+ 
+-# read notes and tempo changes from midi (assume there is only one track)
+-def read_items(file_path):
+-    midi_obj = miditoolkit.midi.parser.MidiFile(file_path)
+-    # note
+-    note_items = []
+-    notes = midi_obj.instruments[0].notes
+-    notes.sort(key=lambda x: (x.start, x.pitch))
+-    for note in notes:
+-        note_items.append(Item(
+-            name='Note', 
+-            start=note.start, 
+-            end=note.end, 
+-            velocity=note.velocity, 
+-            pitch=note.pitch))
+-    note_items.sort(key=lambda x: x.start)
+-    # tempo
+-    tempo_items = []
+-    for tempo in midi_obj.tempo_changes:
+-        tempo_items.append(Item(
+-            name='Tempo',
+-            start=tempo.time,
+-            end=None,
+-            velocity=None,
+-            pitch=int(tempo.tempo)))
+-    tempo_items.sort(key=lambda x: x.start)
+-    # expand to all beat
+-    max_tick = tempo_items[-1].start
+-    existing_ticks = {item.start: item.pitch for item in tempo_items}
+-    wanted_ticks = np.arange(0, max_tick+1, DEFAULT_RESOLUTION)
+-    output = []
+-    for tick in wanted_ticks:
+-        if tick in existing_ticks:
+-            output.append(Item(
+-                name='Tempo',
+-                start=tick,
+-                end=None,
+-                velocity=None,
+-                pitch=existing_ticks[tick]))
+-        else:
+-            output.append(Item(
+-                name='Tempo',
+-                start=tick,
+-                end=None,
+-                velocity=None,
+-                pitch=output[-1].pitch))
+-    tempo_items = output
+-    return note_items, tempo_items
++# read notes from midi and shift all notes
++def get_note_items(midi_path, melody_annotation_path):
++    midi_obj = miditoolkit.midi.parser.MidiFile(midi_path)
++
++    melody_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[0].notes]
++    bridge_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[1].notes]
++    piano_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[2].notes]
++    note_items = melody_note_items + bridge_note_items + piano_note_items
++    note_items.sort(key=lambda x: (x.start, x.pitch))
++
++    with open(melody_annotation_path) as f:
++        melody_annotation = f.read().splitlines()
++    note_number, duration = map(int, melody_annotation[0].split())
++    melody_start = 1  # Shift for an anacrusis
++    if note_number == 0:
++        melody_start += duration / DEFAULT_FRACTION  # Shift for offset of the melody's first note
++
++    ticks_per_bar = DEFAULT_RESOLUTION * 4
++    shift = int(melody_start * ticks_per_bar) - melody_note_items[0].start
++    for note_item in note_items:
++        note_item.start += shift
++        note_item.end += shift
++
++    return note_items
+ 
+ # quantize items
+ def quantize_items(items, ticks=120):
+@@ -85,19 +62,35 @@ def quantize_items(items, ticks=120):
+         item.end += shift
+     return items      
+ 
+-# extract chord
+-def extract_chords(items):
+-    method = chord_recognition.MIDIChord()
+-    chords = method.extract(notes=items)
+-    output = []
+-    for chord in chords:
+-        output.append(Item(
+-            name='Chord',
+-            start=chord[0],
+-            end=chord[1],
+-            velocity=None,
+-            pitch=chord[2].split('/')[0]))
+-    return output
++# read chords from annotation
++def get_chord_items(chord_annotation_path):
++    with open(chord_annotation_path) as f:
++        chord_annotation = f.read().splitlines()
++    ticks_per_beat, ticks_per_bar = DEFAULT_RESOLUTION, DEFAULT_RESOLUTION * 4
++    root_integration_table = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
++    chord_items = [Item(name='Chord', start=0, end=ticks_per_bar, velocity=None, pitch='N:N')]
++    for element in chord_annotation:
++        chord, *_, beat_duration = element.split()
++        if chord.startswith('N'):
++            chord = 'N:N'
++        else:
++            root, symbol = chord.split(':')
++            if 'min' in symbol: symbol = 'min'
++            elif 'maj' in symbol: symbol = 'maj'
++            elif 'dim' in symbol: symbol = 'dim'
++            elif 'aug' in symbol: symbol = 'aug'
++            elif 'sus4' in symbol: symbol = 'sus4'
++            elif 'sus2' in symbol: symbol = 'sus2'
++            else: symbol = 'maj'  # 7, 9, ...
++            root = root_integration_table.get(root, root)
++            chord = f'{root}:{symbol}'
++        start = chord_items[-1].end
++        end = start + int(beat_duration) * ticks_per_beat
++        if chord == chord_items[-1].pitch:
++            chord_items[-1].end = end
++        else:
++            chord_items.append(Item(name='Chord', start=start, end=end, velocity=None, pitch=chord))
++    return chord_items
+ 
+ # group items
+ def group_items(items, max_time, ticks_per_bar=DEFAULT_RESOLUTION*4):
+@@ -130,8 +123,6 @@ def item2event(groups):
+     events = []
+     n_downbeat = 0
+     for i in range(len(groups)):
+-        if 'Note' not in [item.name for item in groups[i][1:-1]]:
+-            continue
+         bar_st, bar_et = groups[i][0], groups[i][-1]
+         n_downbeat += 1
+         events.append(Event(
+@@ -149,16 +140,6 @@ def item2event(groups):
+                 value='{}/{}'.format(index+1, DEFAULT_FRACTION),
+                 text='{}'.format(item.start)))
+             if item.name == 'Note':
+-                # velocity
+-                velocity_index = np.searchsorted(
+-                    DEFAULT_VELOCITY_BINS, 
+-                    item.velocity, 
+-                    side='right') - 1
+-                events.append(Event(
+-                    name='Note Velocity',
+-                    time=item.start, 
+-                    value=velocity_index,
+-                    text='{}/{}'.format(item.velocity, DEFAULT_VELOCITY_BINS[velocity_index])))
+                 # pitch
+                 events.append(Event(
+                     name='Note On',
+@@ -171,7 +152,7 @@ def item2event(groups):
+                 events.append(Event(
+                     name='Note Duration',
+                     time=item.start,
+-                    value=index,
++                    value=DEFAULT_DURATION_BINS[index] / 120,
+                     text='{}/{}'.format(duration, DEFAULT_DURATION_BINS[index])))
+             elif item.name == 'Chord':
+                 events.append(Event(
+@@ -179,28 +160,6 @@ def item2event(groups):
+                     time=item.start,
+                     value=item.pitch,
+                     text='{}'.format(item.pitch)))
+-            elif item.name == 'Tempo':
+-                tempo = item.pitch
+-                if tempo in DEFAULT_TEMPO_INTERVALS[0]:
+-                    tempo_style = Event('Tempo Class', item.start, 'slow', None)
+-                    tempo_value = Event('Tempo Value', item.start, 
+-                        tempo-DEFAULT_TEMPO_INTERVALS[0].start, None)
+-                elif tempo in DEFAULT_TEMPO_INTERVALS[1]:
+-                    tempo_style = Event('Tempo Class', item.start, 'mid', None)
+-                    tempo_value = Event('Tempo Value', item.start, 
+-                        tempo-DEFAULT_TEMPO_INTERVALS[1].start, None)
+-                elif tempo in DEFAULT_TEMPO_INTERVALS[2]:
+-                    tempo_style = Event('Tempo Class', item.start, 'fast', None)
+-                    tempo_value = Event('Tempo Value', item.start, 
+-                        tempo-DEFAULT_TEMPO_INTERVALS[2].start, None)
+-                elif tempo < DEFAULT_TEMPO_INTERVALS[0].start:
+-                    tempo_style = Event('Tempo Class', item.start, 'slow', None)
+-                    tempo_value = Event('Tempo Value', item.start, 0, None)
+-                elif tempo > DEFAULT_TEMPO_INTERVALS[2].stop:
+-                    tempo_style = Event('Tempo Class', item.start, 'fast', None)
+-                    tempo_value = Event('Tempo Value', item.start, 59, None)
+-                events.append(tempo_style)
+-                events.append(tempo_value)     
+     return events
+ 
+ #############################################################################################
+@@ -225,35 +184,19 @@ def write_midi(words, word2event, output_path, prompt_path=None):
+             temp_chords.append('Bar')
+             temp_tempos.append('Bar')
+         elif events[i].name == 'Position' and \
+-            events[i+1].name == 'Note Velocity' and \
+-            events[i+2].name == 'Note On' and \
+-            events[i+3].name == 'Note Duration':
++            events[i+1].name == 'Note On' and \
++            events[i+2].name == 'Note Duration':
+             # start time and end time from position
+             position = int(events[i].value.split('/')[0]) - 1
+-            # velocity
+-            index = int(events[i+1].value)
+-            velocity = int(DEFAULT_VELOCITY_BINS[index])
+             # pitch
+-            pitch = int(events[i+2].value)
++            pitch = int(events[i+1].value)
+             # duration
+-            index = int(events[i+3].value)
+-            duration = DEFAULT_DURATION_BINS[index]
++            duration = int(float(events[i+2].value) * 120)
+             # adding
+-            temp_notes.append([position, velocity, pitch, duration])
++            temp_notes.append([position, pitch, duration])
+         elif events[i].name == 'Position' and events[i+1].name == 'Chord':
+             position = int(events[i].value.split('/')[0]) - 1
+             temp_chords.append([position, events[i+1].value])
+-        elif events[i].name == 'Position' and \
+-            events[i+1].name == 'Tempo Class' and \
+-            events[i+2].name == 'Tempo Value':
+-            position = int(events[i].value.split('/')[0]) - 1
+-            if events[i+1].value == 'slow':
+-                tempo = DEFAULT_TEMPO_INTERVALS[0].start + int(events[i+2].value)
+-            elif events[i+1].value == 'mid':
+-                tempo = DEFAULT_TEMPO_INTERVALS[1].start + int(events[i+2].value)
+-            elif events[i+1].value == 'fast':
+-                tempo = DEFAULT_TEMPO_INTERVALS[2].start + int(events[i+2].value)
+-            temp_tempos.append([position, tempo])
+     # get specific time for notes
+     ticks_per_beat = DEFAULT_RESOLUTION
+     ticks_per_bar = DEFAULT_RESOLUTION * 4 # assume 4/4
+@@ -263,7 +206,7 @@ def write_midi(words, word2event, output_path, prompt_path=None):
+         if note == 'Bar':
+             current_bar += 1
+         else:
+-            position, velocity, pitch, duration = note
++            position, pitch, duration = note
+             # position (start time)
+             current_bar_st = current_bar * ticks_per_bar
+             current_bar_et = (current_bar + 1) * ticks_per_bar
+@@ -271,7 +214,7 @@ def write_midi(words, word2event, output_path, prompt_path=None):
+             st = flags[position]
+             # duration (end time)
+             et = st + duration
+-            notes.append(miditoolkit.Note(velocity, pitch, st, et))
++            notes.append(miditoolkit.Note(60, pitch, st, et))
+     # get specific time for chords
+     if len(temp_chords) > 0:
+         chords = []
+-- 
+2.42.0
+
