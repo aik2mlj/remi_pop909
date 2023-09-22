@@ -151,9 +151,9 @@ class PopMusicTransformer(object):
     ########################################
     # generate
     ########################################
-    def generate(self, n_target_bar, temperature, topk, output_path, prompt=None):
-        if prompt:
-            events = self.extract_events(prompt)
+    def generate(self, n_target_bar, temperature, topk, output_path, prompt_paths=None):
+        if prompt_paths is not None:
+            events = self.extract_events(**prompt_paths)
             words = [[self.event2word['{}_{}'.format(e.name, e.value)] for e in events]]
             words[0].append(self.event2word['Bar_None'])
         else:
@@ -206,18 +206,18 @@ class PopMusicTransformer(object):
             batch_m = _new_mem
         p_bar.close()
         # write
-        if prompt:
-            utils.write_midi(
-                words=words[0][original_length:],
-                word2event=self.word2event,
-                output_path=output_path,
-                prompt_path=prompt)
-        else:
-            utils.write_midi(
-                words=words[0],
-                word2event=self.word2event,
-                output_path=output_path,
-                prompt_path=None)
+        # if prompt_paths is not None:
+        #     utils.write_midi(
+        #         words=words[0][original_length:],
+        #         word2event=self.word2event,
+        #         output_path=output_path,
+        #         prompt_path=prompt_paths)
+        # else:
+        utils.write_midi(
+            words=words[0],
+            word2event=self.word2event,
+            output_path=output_path,
+            prompt_path=None)
 
     ########################################
     # prepare training data

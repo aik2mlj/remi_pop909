@@ -30,26 +30,30 @@ def get_note_items(midi_path, melody_annotation_path, only_melody=False):
     midi_obj = miditoolkit.midi.parser.MidiFile(midi_path)
 
     melody_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[0].notes]
-    bridge_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[1].notes]
-    piano_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[2].notes]
+    other_note_items = []
+    if len(midi_obj.instruments) > 1:
+        for inst in midi_obj.instruments[1:]:
+            for note in inst.notes:
+                other_note_items.append(Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch))
     if only_melody:
         note_items = melody_note_items
     else:
-        note_items = melody_note_items + bridge_note_items + piano_note_items
+        note_items = melody_note_items + other_note_items
     note_items.sort(key=lambda x: (x.start, x.pitch))
 
-    with open(melody_annotation_path) as f:
-        melody_annotation = f.read().splitlines()
-    note_number, duration = map(int, melody_annotation[0].split())
-    melody_start = 1  # Shift for an anacrusis
-    if note_number == 0:
-        melody_start += duration / DEFAULT_FRACTION  # Shift for offset of the melody's first note
+    if melody_annotation_path is not None:
+        with open(melody_annotation_path) as f:
+            melody_annotation = f.read().splitlines()
+        note_number, duration = map(int, melody_annotation[0].split())
+        melody_start = 1  # Shift for an anacrusis
+        if note_number == 0:
+            melody_start += duration / DEFAULT_FRACTION  # Shift for offset of the melody's first note
 
-    ticks_per_bar = DEFAULT_RESOLUTION * 4
-    shift = int(melody_start * ticks_per_bar) - melody_note_items[0].start
-    for note_item in note_items:
-        note_item.start += shift
-        note_item.end += shift
+        ticks_per_bar = DEFAULT_RESOLUTION * 4
+        shift = int(melody_start * ticks_per_bar) - melody_note_items[0].start
+        for note_item in note_items:
+            note_item.start += shift
+            note_item.end += shift
 
     return note_items
 

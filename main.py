@@ -10,6 +10,8 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--only-melody", action="store_true")
+    parser.add_argument("--prompt", help="the prompt midi path")
+    parser.add_argument("--prompt-chord", help="the chord of prompt midi path")
     args = parser.parse_args()
 
     chkpt_name = 'REMI-chord-melody' if args.only_melody else "REMI-chord"
@@ -19,27 +21,27 @@ def main():
         checkpoint=chkpt_name,
         is_training=False)
     
-    # generate from scratch
-    model.generate(
-        n_target_bar=16,
-        temperature=1.2,
-        topk=5,
-        output_path=f"./result/gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
-        prompt=None)
-    
-    # generate continuation
-    train_inds, valid_inds = load_split_file("./split.npz")
-    train_inds += 1
-    valid_inds += 1
-    print(valid_inds)
-    num = int(input("choose one from pop909:"))
-    prompt_song = valid_inds[num]
-    model.generate(
-        n_target_bar=16,
-        temperature=1.2,
-        topk=5,
-        output_path=f"./result/prompt_gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
-        prompt=f'./POP909-Dataset/POP909/{prompt_song:03}/{prompt_song:03}.mid')
+    if args.prompt is None:
+        # generate from scratch
+        model.generate(
+            n_target_bar=16,
+            temperature=1.2,
+            topk=5,
+            output_path=f"./result/gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
+            prompt_paths=None)
+    else:
+        # generate continuation
+        prompt_paths = {
+            'midi_path': args.prompt,
+            'melody_annotation_path': None,
+            'chord_annotation_path': args.prompt_chord,
+        }
+        model.generate(
+            n_target_bar=16,
+            temperature=1.2,
+            topk=5,
+            output_path=f"./result/prompt_gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
+            prompt_paths=prompt_paths)
     
     # close model
     model.close()
