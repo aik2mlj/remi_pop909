@@ -8,3 +8,5 @@ miditoolkit.egg-info/
 *.pypirc
 Thumbs.db
 *.gz
+POP909-Dataset/
+hierarchical-structure-analysis/
