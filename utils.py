@@ -30,9 +30,9 @@ def get_note_items(midi_path, melody_annotation_path):
     midi_obj = miditoolkit.midi.parser.MidiFile(midi_path)
 
     melody_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[0].notes]
-    bridge_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[1].notes]
-    piano_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[2].notes]
-    note_items = melody_note_items + bridge_note_items + piano_note_items
+    # bridge_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[1].notes]
+    # piano_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[2].notes]
+    note_items = melody_note_items
     note_items.sort(key=lambda x: (x.start, x.pitch))
 
     with open(melody_annotation_path) as f:
