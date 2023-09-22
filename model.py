@@ -6,6 +6,7 @@ import pickle
 import utils
 import time
 import os
+from tqdm import tqdm
 
 class PopMusicTransformer(object):
     ########################################
@@ -171,6 +172,7 @@ class PopMusicTransformer(object):
         original_length = len(words[0])
         initial_flag = 1
         current_generated_bar = 0
+        p_bar = tqdm(total=n_target_bar)
         while current_generated_bar < n_target_bar:
             # input
             if initial_flag:
@@ -199,8 +201,10 @@ class PopMusicTransformer(object):
             # if bar event (only work for batch_size=1)
             if word == self.event2word['Bar_None']:
                 current_generated_bar += 1
+                p_bar.update(1)
             # re-new mem
             batch_m = _new_mem
+        p_bar.close()
         # write
         if prompt:
             utils.write_midi(
