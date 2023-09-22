@@ -2,6 +2,9 @@ from model import PopMusicTransformer
 from datetime import datetime
 import os
 import argparse
+import pickle
+from finetune import load_split_file
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def main():
@@ -25,12 +28,18 @@ def main():
         prompt=None)
     
     # generate continuation
+    train_inds, valid_inds = load_split_file("./split.npz")
+    train_inds += 1
+    valid_inds += 1
+    print(valid_inds)
+    num = int(input("choose one from pop909:"))
+    prompt_song = valid_inds[num]
     model.generate(
         n_target_bar=16,
         temperature=1.2,
         topk=5,
-        output_path='./result/continuation.midi',
-        prompt='./data/evaluation/000.midi')
+        output_path=f"./result/prompt_gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
+        prompt=f'./POP909-Dataset/POP909/{prompt_song:03}/{prompt_song:03}.mid')
     
     # close model
     model.close()
