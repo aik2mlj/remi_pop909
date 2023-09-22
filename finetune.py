@@ -13,7 +13,7 @@ def load_split_file(split_fn):
 def main():
     # declare model
     model = PopMusicTransformer(
-        checkpoint='chord',
+        checkpoint='REMI-chord',
         is_training=True)
     # prepare data
     unused_pieces = [
