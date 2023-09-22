@@ -133,8 +133,8 @@ class PopMusicTransformer(object):
     ########################################
     # extract events for prompt continuation
     ########################################
-    def extract_events(self, midi_path, melody_annotation_path, chord_annotation_path):
-        note_items = utils.get_note_items(midi_path, melody_annotation_path)
+    def extract_events(self, midi_path, melody_annotation_path, chord_annotation_path, only_melody=False):
+        note_items = utils.get_note_items(midi_path, melody_annotation_path, only_melody)
         note_items = utils.quantize_items(note_items)
         max_time = note_items[-1].end
         if 'chord' in self.checkpoint_path:
@@ -218,11 +218,11 @@ class PopMusicTransformer(object):
     ########################################
     # prepare training data
     ########################################
-    def prepare_data(self, paths):
+    def prepare_data(self, paths, only_melody=False):
         # extract events
         all_events = []
         for path in paths:
-            events = self.extract_events(**path)
+            events = self.extract_events(**path, only_melody=only_melody)
             all_events.append(events)
         # make dictionary
         dictionary = sorted({f'{event.name}_{event.value}' for events in all_events for event in events})

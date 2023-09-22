@@ -2,6 +2,7 @@ from model import PopMusicTransformer
 import pickle
 import os
 import numpy as np
+import argparse
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def load_split_file(split_fn):
@@ -12,8 +13,15 @@ def load_split_file(split_fn):
 
 def main():
     # declare model
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--only-melody", action="store_true")
+    args = parser.parse_args()
+    output_checkpoint_folder = 'REMI-chord' # your decision
+    if args.only_melody:
+        output_checkpoint_folder = output_checkpoint_folder + "-melody"
+    print(output_checkpoint_folder)
     model = PopMusicTransformer(
-        checkpoint='REMI-chord',
+        checkpoint=output_checkpoint_folder,
         is_training=True)
     # prepare data
     unused_pieces = [
@@ -32,7 +40,7 @@ def main():
         'chord_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/finalized_chord.txt",
         # 'phrase_annotation_path': f"hierarchical-structure-analysis/POP909/{i:03}/human_label1.txt",
     } for i in train_inds if i not in unused_pieces]
-    training_data, dictionary = model.prepare_data(paths)
+    training_data, dictionary = model.prepare_data(paths, args.only_melody)
 
     # check output checkpoint folder
     ####################################
@@ -42,7 +50,6 @@ def main():
     # if use "REMI-tempo-checkpoint"
     # for example: my-love, cute-doggy, ...
     ####################################
-    output_checkpoint_folder = 'REMI-chord' # your decision
     if not os.path.exists(output_checkpoint_folder):
         os.mkdir(output_checkpoint_folder)
     
