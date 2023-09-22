@@ -5,6 +5,7 @@ import modules
 import pickle
 import utils
 import time
+import os
 
 class PopMusicTransformer(object):
     ########################################
@@ -33,7 +34,15 @@ class PopMusicTransformer(object):
             self.batch_size = 4
         else:
             self.batch_size = 1
-        self.checkpoint_path = '{}/model'.format(checkpoint)
+        self.last_epoch = -1
+        last_checkpoint = "model"
+        for chkpt in os.listdir(checkpoint):
+            if chkpt[:5] == "model" and chkpt[-5:] == "index":
+                if int(chkpt[6:9]) > self.last_epoch:
+                    self.last_epoch = int(chkpt[6:9])
+                    last_checkpoint = chkpt
+        self.checkpoint_path = '{}/{}'.format(checkpoint, last_checkpoint[:15])
+        print(self.checkpoint_path)
 
     ########################################
     # load model
@@ -96,8 +105,13 @@ class PopMusicTransformer(object):
         config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         self.sess = tf.compat.v1.Session(config=config)
-        if self.is_training: self.sess.run(tf.compat.v1.initialize_all_variables())
-        else: self.saver.restore(self.sess, self.checkpoint_path)
+        # if self.is_training: self.sess.run(tf.compat.v1.initialize_all_variables())
+        if os.path.exists(self.checkpoint_path + ".index"):
+            self.saver.restore(self.sess, self.checkpoint_path)
+            print("model loaded...")
+        else:
+            self.sess.run(tf.compat.v1.initialize_all_variables())
+            print("training from scratch...")
 
     ########################################
     # temperature sampling
@@ -261,7 +275,7 @@ class PopMusicTransformer(object):
     def finetune(self, training_data, output_checkpoint_folder):
         self.load_model()
         st = time.time()
-        for e in range(200):
+        for e in range(self.last_epoch + 1, 200):
             total_loss = []
             # shuffle
             segment_lens = list(training_data.keys())
