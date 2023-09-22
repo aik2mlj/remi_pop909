@@ -13,10 +13,6 @@ class PopMusicTransformer(object):
     ########################################
     def __init__(self, checkpoint, is_training=False):
         # load dictionary
-        if checkpoint != 'chord':
-            self.dictionary_path = '{}/dictionary.pkl'.format(checkpoint)
-            self.event2word, self.word2event = pickle.load(open(self.dictionary_path, 'rb'))
-            self.n_token = len(self.event2word)
         # model settings
         self.x_len = 512
         self.mem_len = 512
@@ -41,6 +37,10 @@ class PopMusicTransformer(object):
                 if int(chkpt[6:9]) > self.last_epoch:
                     self.last_epoch = int(chkpt[6:9])
                     last_checkpoint = chkpt
+        if self.last_epoch != -1:
+            self.dictionary_path = '{}/dictionary.pkl'.format(checkpoint)
+            self.event2word, self.word2event = pickle.load(open(self.dictionary_path, 'rb'))
+            self.n_token = len(self.event2word)
         self.checkpoint_path = '{}/{}'.format(checkpoint, last_checkpoint[:15])
         print(self.checkpoint_path)
 

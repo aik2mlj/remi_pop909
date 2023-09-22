@@ -20,6 +20,9 @@ def main():
     if args.only_melody:
         output_checkpoint_folder = output_checkpoint_folder + "-melody"
     print(output_checkpoint_folder)
+    if not os.path.exists(output_checkpoint_folder):
+        os.mkdir(output_checkpoint_folder)
+    
     model = PopMusicTransformer(
         checkpoint=output_checkpoint_folder,
         is_training=True)
@@ -50,9 +53,6 @@ def main():
     # if use "REMI-tempo-checkpoint"
     # for example: my-love, cute-doggy, ...
     ####################################
-    if not os.path.exists(output_checkpoint_folder):
-        os.mkdir(output_checkpoint_folder)
-    
     # save dictionary
     pickle.dump(dictionary, open(f'{output_checkpoint_folder}/dictionary.pkl', 'wb'))
 
