@@ -44,6 +44,7 @@ class PopMusicTransformer(object):
             self.n_token = len(self.event2word)
         self.checkpoint_path = '{}/{}'.format(checkpoint, last_checkpoint[:15])
         print(self.checkpoint_path)
+        self.load_model()
 
     ########################################
     # load model
@@ -151,7 +152,6 @@ class PopMusicTransformer(object):
     # generate
     ########################################
     def generate(self, n_target_bar, temperature, topk, output_path, prompt=None):
-        self.load_model()
         if prompt:
             events = self.extract_events(prompt)
             words = [[self.event2word['{}_{}'.format(e.name, e.value)] for e in events]]
@@ -277,7 +277,6 @@ class PopMusicTransformer(object):
     # finetune
     ########################################
     def finetune(self, training_data, output_checkpoint_folder):
-        self.load_model()
         st = time.time()
         for e in range(self.last_epoch + 1, 200):
             total_loss = []
