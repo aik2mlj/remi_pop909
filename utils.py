@@ -2,6 +2,7 @@ import math
 import numpy as np
 import miditoolkit
 import copy
+import mir_eval
 
 # parameters for input
 DEFAULT_VELOCITY_BINS = np.linspace(0, 128, 32+1, dtype=np.int)
@@ -179,7 +180,7 @@ def word_to_event(words, word2event):
         events.append(Event(event_name, None, event_value, None))
     return events
 
-def write_midi(words, word2event, output_path, prompt_path=None):
+def write_midi(words, word2event, output_path, prompt_path=None, write_chord=True):
     events = word_to_event(words, word2event)
     # get downbeat and note (no time)
     temp_notes = []
@@ -294,5 +295,19 @@ def write_midi(words, word2event, output_path, prompt_path=None):
             for c in chords:
                 midi.markers.append(
                     miditoolkit.midi.containers.Marker(text=c[1], time=c[0]))
+
+        if len(temp_chords) > 0 and write_chord:
+            inst_chd = miditoolkit.midi.containers.Instrument(0, is_drum=False)
+            for i, c in enumerate(chords):
+                if c[1] == "N:N": continue
+                st = c[0]
+                et = chords[i + 1][0] if i < len(chords) - 1 else notes[-1].end
+                root, bitmap, bass = mir_eval.chord.encode(c[1])
+                root = 48 + root  # pitch, 48 is c3
+                for tone, bit in enumerate(bitmap):
+                    if bit == 1:
+                        inst_chd.notes.append(miditoolkit.Note(60, root + tone, st, et))
+            midi.instruments.append(inst_chd)
+
     # write
     midi.dump(output_path)
