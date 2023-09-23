@@ -28,7 +28,7 @@ def main():
         # generate from scratch
         for _ in range(int(args.n)):
             model.generate(
-                n_target_bar=n_target_bar,
+                n_target_bar=n_target_bar + 1,  # including N:N
                 temperature=1.2,
                 topk=5,
                 output_path=f"./result/gen({chkpt_name})-{n_target_bar}bar_{datetime.now().strftime('%m-%d_%H%M%S')}.midi",
