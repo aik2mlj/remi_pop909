@@ -153,7 +153,7 @@ class PopMusicTransformer(object):
     ########################################
     def generate(self, n_target_bar, temperature, topk, output_path, prompt_paths=None):
         if prompt_paths is not None:
-            events = self.extract_events(**prompt_paths)
+            events = self.extract_events(**prompt_paths, only_melody=bool("melody" in self.checkpoint_path))
             words = [[self.event2word['{}_{}'.format(e.name, e.value)] for e in events]]
             words[0].append(self.event2word['Bar_None'])
         else:
