@@ -52,6 +52,8 @@ def get_note_items(midi_path, melody_annotation_path, only_melody=False):
 
         ticks_per_bar = DEFAULT_RESOLUTION * 4
         shift = int(melody_start * ticks_per_bar) - melody_note_items[0].start
+    else:
+        shift = DEFAULT_RESOLUTION * 4  # the first N:N bar
         for note_item in note_items:
             note_item.start += shift
             note_item.end += shift
