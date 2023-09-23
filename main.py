@@ -31,7 +31,7 @@ def main():
                 n_target_bar=n_target_bar,
                 temperature=1.2,
                 topk=5,
-                output_path=f"./result/gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
+                output_path=f"./result/gen({chkpt_name})-{n_target_bar}bar_{datetime.now().strftime('%m-%d_%H%M%S')}.midi",
                 prompt_paths=None)
     else:
         # generate continuation
@@ -45,7 +45,7 @@ def main():
                 n_target_bar=n_target_bar,
                 temperature=1.2,
                 topk=5,
-                output_path=f"./result/prompt_gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
+                output_path=f"./result/prompt_gen({chkpt_name})-{n_target_bar}bar_{datetime.now().strftime('%m-%d_%H%M%S')}.midi",
                 prompt_paths=prompt_paths)
     
     # close model
