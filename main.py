@@ -9,12 +9,14 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--len", help="the generation length")
     parser.add_argument("--only-melody", action="store_true")
     parser.add_argument("--prompt", help="the prompt midi path")
     parser.add_argument("--prompt-chord", help="the chord of prompt midi path")
     args = parser.parse_args()
 
     chkpt_name = 'REMI-chord-melody' if args.only_melody else "REMI-chord"
+    n_target_bar = int(args.len)
 
     # declare model
     model = PopMusicTransformer(
@@ -24,7 +26,7 @@ def main():
     if args.prompt is None:
         # generate from scratch
         model.generate(
-            n_target_bar=16,
+            n_target_bar=n_target_bar,
             temperature=1.2,
             topk=5,
             output_path=f"./result/gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
@@ -37,7 +39,7 @@ def main():
             'chord_annotation_path': args.prompt_chord,
         }
         model.generate(
-            n_target_bar=16,
+            n_target_bar=n_target_bar,
             temperature=1.2,
             topk=5,
             output_path=f"./result/prompt_gen({chkpt_name})_{datetime.now().strftime('%m-%d_%H%M')}.midi",
