@@ -307,10 +307,12 @@ def write_midi(words, word2event, output_path, prompt_path=None, write_chord=Tru
                 st = c[0]
                 et = chords[i + 1][0] if i < len(chords) - 1 else st + DEFAULT_RESOLUTION * 4
                 root, bitmap, bass = mir_eval.chord.encode(c[1])
-                root = 48 + root  # pitch, 48 is c3
+                bitmap = mir_eval.chord.rotate_bitmap_to_root(bitmap, root)
+                root = 36 + root  # pitch, 36 is c2
+                inst_chd.notes.append(miditoolkit.Note(60, root, st, et))
                 for tone, bit in enumerate(bitmap):
                     if bit == 1:
-                        inst_chd.notes.append(miditoolkit.Note(60, root + tone, st, et))
+                        inst_chd.notes.append(miditoolkit.Note(60, 48 + tone, st, et))
             midi.instruments.append(inst_chd)
 
     # write
