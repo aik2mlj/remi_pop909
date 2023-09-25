@@ -30,6 +30,7 @@ class Item(object):
 # read notes from midi and shift all notes
 def get_note_items(midi_path, melody_annotation_path, only_melody=False):
     midi_obj = miditoolkit.midi.parser.MidiFile(midi_path)
+    midi_obj.dump("./result/ooo.mid")
 
     melody_note_items = [Item(name='Note', start=note.start, end=note.end, velocity=note.velocity, pitch=note.pitch) for note in midi_obj.instruments[0].notes]
     other_note_items = []

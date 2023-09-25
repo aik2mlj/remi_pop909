@@ -156,6 +156,11 @@ class PopMusicTransformer(object):
             events = self.extract_events(**prompt_paths, only_melody=bool("melody" in self.checkpoint_path))
             words = [[self.event2word['{}_{}'.format(e.name, e.value)] for e in events]]
             words[0].append(self.event2word['Bar_None'])
+            utils.write_midi(
+                words=words[0],
+                word2event=self.word2event,
+                output_path="./result/original.mid",
+                prompt_path=None)
         else:
             words = []
             for _ in range(self.batch_size):
