@@ -140,7 +140,7 @@ class PopMusicTransformer(object):
         note_items = utils.quantize_items(note_items)
         max_time = note_items[-1].end
         if 'chord' in self.checkpoint_path:
-            chord_items = utils.get_chord_items(chord_annotation_path)
+            chord_items = utils.get_chord_items(chord_annotation_path, max_time)
             items = chord_items +  note_items
         else:
             items = note_items

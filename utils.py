@@ -73,7 +73,7 @@ def quantize_items(items, ticks=120):
     return items      
 
 # read chords from annotation
-def get_chord_items(chord_annotation_path):
+def get_chord_items(chord_annotation_path, max_time):
     with open(chord_annotation_path) as f:
         chord_annotation = f.read().splitlines()
     ticks_per_beat, ticks_per_bar = DEFAULT_RESOLUTION, DEFAULT_RESOLUTION * 4
@@ -96,6 +96,8 @@ def get_chord_items(chord_annotation_path):
             chord = f'{root}:{symbol}'
         start = chord_items[-1].end
         end = start + int(beat_duration) * ticks_per_beat
+        if start >= max_time:
+            break
         if chord == chord_items[-1].pitch:
             chord_items[-1].end = end
         else:
