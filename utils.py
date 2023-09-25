@@ -12,6 +12,7 @@ DEFAULT_TEMPO_INTERVALS = [range(30, 90), range(90, 150), range(150, 210)]
 
 # parameters for output
 DEFAULT_RESOLUTION = 480
+DEFAULT_VELOCITY = 80
 
 # define "Item" for general storage
 class Item(object):
@@ -226,7 +227,7 @@ def write_midi(words, word2event, output_path, prompt_path=None, write_chord=Tru
             st = flags[position]
             # duration (end time)
             et = st + duration
-            notes.append(miditoolkit.Note(60, pitch, st, et))
+            notes.append(miditoolkit.Note(DEFAULT_VELOCITY, pitch, st, et))
     # get specific time for chords
     if len(temp_chords) > 0:
         chords = []
@@ -309,10 +310,10 @@ def write_midi(words, word2event, output_path, prompt_path=None, write_chord=Tru
                 root, bitmap, bass = mir_eval.chord.encode(c[1])
                 bitmap = mir_eval.chord.rotate_bitmap_to_root(bitmap, root)
                 root = 36 + root  # pitch, 36 is c2
-                inst_chd.notes.append(miditoolkit.Note(60, root, st, et))
+                inst_chd.notes.append(miditoolkit.Note(DEFAULT_VELOCITY, root, st, et))
                 for tone, bit in enumerate(bitmap):
                     if bit == 1:
-                        inst_chd.notes.append(miditoolkit.Note(60, 48 + tone, st, et))
+                        inst_chd.notes.append(miditoolkit.Note(DEFAULT_VELOCITY, 48 + tone, st, et))
             midi.instruments.append(inst_chd)
 
     # write
